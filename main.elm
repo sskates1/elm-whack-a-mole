@@ -128,10 +128,10 @@ update msg model =
             ( tickTimer model, Cmd.none )
 
         Start ->
-            ( { model | started = True, timer = gameTimeInit, score = 0 }, Cmd.none )
+            ( { model | started = True, timer = gameTimeInit, score = 0, game = gameInit }, Cmd.none )
 
         End ->
-            ( { model | started = False }, Cmd.none )
+            ( { model | started = False, game = gameInit }, Cmd.none )
 
         CreateMole time ->
             if model.started then
@@ -156,7 +156,7 @@ tickTimer model =
     if model.started && model.timer > 0 then
         { model | timer = model.timer - 1 }
     else if model.started then
-        { model | started = False }
+        { model | started = False, game = gameInit }
     else
         model
 
