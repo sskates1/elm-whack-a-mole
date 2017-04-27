@@ -97,7 +97,7 @@ moleRowView moleArray =
 moleView : Mole -> Html Msg
 moleView mole =
     if mole.poppedUp then
-        div [ moleStyle ] [ img [ src "/mole2.png", onClick <| Whack mole ] [] ]
+        div [ moleStyle ] [ img [ src "mole2.png", onClick <| Whack mole ] [] ]
     else
         div [ moleStyle ] []
 
