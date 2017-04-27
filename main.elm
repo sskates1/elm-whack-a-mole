@@ -6,6 +6,8 @@ import Html.Events exposing (onClick)
 import Array exposing (..)
 import Time exposing (..)
 import List.Extra
+import Random.Extra
+import Random
 
 
 main : Program Never Model Msg
@@ -20,7 +22,7 @@ main =
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model 0 0 gameInit, Cmd.none )
+    ( Model 0 False gameTimeInit gameInit, Cmd.none )
 
 
 gameInit : Game
@@ -33,13 +35,25 @@ moleInit id =
     (Mole False 3 id)
 
 
+gameTimeInit : Int
+gameTimeInit =
+    20
+
+
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Time.every 5 CreateMoal
+    Sub.batch
+        [ Time.every 500
+            CreateMole
+        , Time.every
+            1000
+            Tick
+        ]
 
 
 type alias Model =
     { score : Int
+    , started : Bool
     , timer : Int
     , game : Game
     }
@@ -92,7 +106,9 @@ type Msg
     = Whack Mole
     | Start
     | End
-    | CreateMoal Time
+    | CreateMole Time
+    | PopMole (Maybe Mole)
+    | Tick Time
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -100,23 +116,58 @@ update msg model =
     case msg of
         Whack mole ->
             let
-                newScore =
-                    model.score + 1
+                newModel =
+                    if model.started then
+                        { model | score = model.score + 1 }
+                    else
+                        model
             in
-                ( whackMole mole model, Cmd.none )
+                ( updateMole mole newModel, Cmd.none )
+
+        Tick _ ->
+            ( tickTimer model, Cmd.none )
 
         Start ->
-            ( model, Cmd.none )
+            ( { model | started = True, timer = gameTimeInit, score = 0 }, Cmd.none )
 
         End ->
+            ( { model | started = False }, Cmd.none )
+
+        CreateMole time ->
+            if model.started then
+                ( model, popUpMole model )
+            else
+                ( model, Cmd.none )
+
+        PopMole (Just mole) ->
+            ( updateMole mole model, Cmd.none )
+
+        PopMole Nothing ->
             ( model, Cmd.none )
 
-        CreateMoal time ->
-            ( model, Cmd.none )
+
+popUpMole : Model -> Cmd Msg
+popUpMole model =
+    Random.generate PopMole (Random.Extra.sample model.game.moles)
 
 
-whackMole : Mole -> Model -> Model
-whackMole mole model =
+tickTimer : Model -> Model
+tickTimer model =
+    if model.started && model.timer > 0 then
+        { model | timer = model.timer - 1 }
+    else if model.started then
+        { model | started = False }
+    else
+        model
+
+
+mapGame : (Game -> Game) -> Model -> Model
+mapGame f model =
+    { model | game = f model.game }
+
+
+updateMole : Mole -> Model -> Model
+updateMole mole model =
     let
         gameMoles =
             List.Extra.updateIf (\x -> mole.id == x.id) changeMoleState model.game.moles
