@@ -32,7 +32,12 @@ gameInit =
 
 moleInit : Int -> Mole
 moleInit id =
-    (Mole False 3 id)
+    (Mole Unpopped id)
+
+
+defaultTTL : Int
+defaultTTL =
+    1
 
 
 gameTimeInit : Int
@@ -42,13 +47,17 @@ gameTimeInit =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.batch
-        [ Time.every 500
-            CreateMole
-        , Time.every
-            1000
-            Tick
-        ]
+    if model.started then
+        Sub.batch
+            [ Time.every
+                500
+                CreateMole
+            , Time.every
+                1000
+                Tick
+            ]
+    else
+        Sub.none
 
 
 type alias Model =
@@ -96,7 +105,7 @@ moleRowView moleArray =
 
 moleView : Mole -> Html Msg
 moleView mole =
-    if mole.poppedUp then
+    if isPopped mole then
         div [ moleStyle ] [ img [ src "mole2.png", onClick <| Whack mole ] [] ]
     else
         div [ moleStyle ] []
@@ -115,14 +124,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Whack mole ->
-            let
-                newModel =
-                    if model.started then
-                        { model | score = model.score + 1 }
-                    else
-                        model
-            in
-                ( updateMole mole newModel, Cmd.none )
+            ( (updateMole mole << incrementScore) model, Cmd.none )
 
         Tick _ ->
             ( tickTimer model, Cmd.none )
@@ -133,7 +135,7 @@ update msg model =
         End ->
             ( { model | started = False, game = gameInit }, Cmd.none )
 
-        CreateMole time ->
+        CreateMole _ ->
             if model.started then
                 ( model, popUpMole model )
             else
@@ -146,19 +148,42 @@ update msg model =
             ( model, Cmd.none )
 
 
+incrementScore : Model -> Model
+incrementScore model =
+    { model | score = model.score + 1 }
+
+
 popUpMole : Model -> Cmd Msg
 popUpMole model =
-    Random.generate PopMole (Random.Extra.sample model.game.moles)
+    Random.generate PopMole (Random.Extra.sample <| List.filter (not << isPopped) model.game.moles)
 
 
 tickTimer : Model -> Model
 tickTimer model =
     if model.started && model.timer > 0 then
-        { model | timer = model.timer - 1 }
+        { model | timer = model.timer - 1, game = countDownPoppedMoles model.game }
     else if model.started then
         { model | started = False, game = gameInit }
     else
         model
+
+
+countDownPoppedMoles : Game -> Game
+countDownPoppedMoles game =
+    { game | moles = List.map reduceLifeOfMole game.moles }
+
+
+reduceLifeOfMole : Mole -> Mole
+reduceLifeOfMole mole =
+    case mole.state of
+        Popped 0 ->
+            { mole | state = Unpopped }
+
+        Popped timeToLive ->
+            { mole | state = Popped (timeToLive - 1) }
+
+        Unpopped ->
+            mole
 
 
 mapGame : (Game -> Game) -> Model -> Model
@@ -180,15 +205,50 @@ updateMole mole model =
 
 changeMoleState : Mole -> Mole
 changeMoleState mole =
-    { mole | poppedUp = not mole.poppedUp }
+    case mole.state of
+        Unpopped ->
+            { mole | state = Popped defaultTTL }
+
+        Popped _ ->
+            { mole | state = Unpopped }
 
 
 type alias Game =
     { moles : List Mole }
 
 
+type MoleState
+    = Popped Int
+    | Unpopped
+
+
 type alias Mole =
-    { poppedUp : Bool
-    , lifeTimer : Int
+    { state : MoleState
     , id : Int
     }
+
+
+isPopped : Mole -> Bool
+isPopped mole =
+    case mole.state of
+        Popped _ ->
+            True
+
+        Unpopped ->
+            False
+
+
+
+-- mapMoleState : (Int -> Int) -> MoleState -> MoleState
+-- mapMoleState func moleState =
+--     case moleState of
+--         Popped ttl ->
+--             Popped (func ttl)
+--
+--         Unpopped ->
+--             Unpopped
+--
+--
+-- decrementMoleState : MoleState -> MoleState
+-- decrementMoleState =
+--     mapMoleState ((-) 1)
